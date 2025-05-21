@@ -1,10 +1,10 @@
 services:
   - type: web
-    name: oxibot-fronted
+    name: oxibot-frontend
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: python main.py
+    startCommand: uvicorn main:app --host 0.0.0.0 --port 8080
     workingDir: fronted
     autoDeploy: true
 
