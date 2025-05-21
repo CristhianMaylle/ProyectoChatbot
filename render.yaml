@@ -5,7 +5,7 @@ services:
     plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: python main.py
-    workingDir: frontend
+    workingDir: fronted
     autoDeploy: true
 
   - type: web
