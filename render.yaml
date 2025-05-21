@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: oxibot-frontend
+    name: oxibot-fronted
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
