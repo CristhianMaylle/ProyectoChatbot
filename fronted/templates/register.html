@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}Registrarse - Oxymonitor{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="card shadow-lg border-0 rounded-lg mt-3">
+            <div class="card-header bg-primary text-white text-center py-3">
+                <h3 class="mb-0">Crear Cuenta</h3>
+            </div>
+            <div class="card-body p-4">
+                {% if request.query_params.get('error') %}
+                <div class="alert alert-danger" role="alert">
+                    {{ request.query_params.get('error') }}
+                </div>
+                {% endif %}
+                
+                <form action="/register" method="post">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Nombre Completo</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-user"></i></span>
+                            <input type="text" class="form-control" id="name" name="name" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Correo Electrónico</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-envelope"></i></span>
+                            <input type="email" class="form-control" id="email" name="email" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Contraseña</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-lock"></i></span>
+                            <input type="password" class="form-control" id="password" name="password" required minlength="8">
+                        </div>
+                        <div class="form-text">La contraseña debe tener al menos 8 caracteres.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="phone" class="form-label">Teléfono (opcional)</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-phone"></i></span>
+                            <input type="tel" class="form-control" id="phone" name="phone" placeholder="+51987654321">
+                        </div>
+                        <div class="form-text">Incluye el código de país (ej: +51 para Perú).</div>
+                    </div>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="fas fa-user-plus me-2"></i>Registrarse
+                        </button>
+                    </div>
+                </form>
+            </div>
+            <div class="card-footer text-center py-3">
+                <div class="small">
+                    ¿Ya tienes una cuenta? <a href="/login">Inicia sesión aquí</a>
+                </div>
+                <div class="small mt-2">
+                    <a href="/measure">Continuar sin registrarse</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

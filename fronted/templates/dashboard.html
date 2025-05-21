@@ -1,0 +1,797 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Oxymonitor{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h1 class="mb-3">Dashboard</h1>
+        <p class="lead">Bienvenido a tu panel de control, {{ request.cookies.get('user_name') }}. Aquí puedes ver tus estadísticas de oxígeno en sangre y pulso cardíaco.</p>
+    </div>
+    <div class="col-md-4 text-md-end d-flex align-items-center justify-content-md-end mt-3 mt-md-0">
+        <a href="/measure" class="btn btn-primary me-2">
+            <i class="fas fa-heartbeat me-2"></i>Nueva Medición
+        </a>
+        <button id="refresh-dashboard" class="btn btn-outline-secondary">
+            <i class="fas fa-sync-alt me-2"></i>Actualizar
+        </button>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Panel principal con chatbot y dashboard -->
+    <div class="col-lg-8">
+        <!-- Tarjetas de indicadores -->
+        <div class="row mb-4">
+            <div class="col-md-6 col-lg-3 mb-3">
+                <div class="card h-100 border-0 shadow-sm">
+                    <div class="card-body text-center">
+                        <h5 class="card-title text-muted">Último SpO₂</h5>
+                        <div class="display-4 fw-bold mb-0" id="latest-spo2">--</div>
+                        <div class="badge mb-2" id="spo2-status">Cargando...</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-3 mb-3">
+                <div class="card h-100 border-0 shadow-sm">
+                    <div class="card-body text-center">
+                        <h5 class="card-title text-muted">Último Pulso</h5>
+                        <div class="display-4 fw-bold mb-0" id="latest-pulse">--</div>
+                        <div class="text-muted">BPM</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-3 mb-3">
+                <div class="card h-100 border-0 shadow-sm">
+                    <div class="card-body text-center">
+                        <h5 class="card-title text-muted">Última Medición</h5>
+                        <div class="h5 mb-0" id="last-measured">--</div>
+                        <div class="text-muted">Fecha y hora</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-3 mb-3">
+                <div class="card h-100 border-0 shadow-sm">
+                    <div class="card-body text-center">
+                        <h5 class="card-title text-muted">Alertas Críticas</h5>
+                        <div class="display-4 fw-bold mb-0" id="critical-alerts">--</div>
+                        <div class="text-muted">Total</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Gráficos -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Historial de SpO₂</h5>
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-sm btn-outline-secondary period-selector active" data-period="7d">7 días</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary period-selector" data-period="30d">30 días</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="spo2-chart" height="250"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-md-6 mb-4">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0">Distribución de Rangos</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="range-chart" height="250"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 mb-4">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0">Pulso Cardíaco</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="pulse-chart" height="250"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Panel lateral con chatbot y notificaciones -->
+    <div class="col-lg-4">
+        <!-- Chatbot integrado -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-robot me-2"></i>Chatbot Oxymonitor
+                </h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="chat-container" id="chat-container">
+                    <div class="chat-messages" id="chat-messages">
+                        <div class="message system">
+                            <div class="message-content">
+                                <p>Cargando chatbot...</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="chat-input-container">
+                        <form id="chat-form">
+                            <div class="input-group">
+                                <input type="text" id="chat-input" class="form-control" placeholder="Escribe tu mensaje..." disabled>
+                                <button type="submit" class="btn btn-primary" disabled id="send-button">
+                                    <i class="fas fa-paper-plane"></i>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Configuración de recordatorios -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-bell me-2"></i>Recordatorios
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="reminder-form">
+                    <div class="mb-3">
+                        <label for="reminder-frequency" class="form-label">Frecuencia</label>
+                        <select class="form-select" id="reminder-frequency" required>
+                            <option value="">Seleccionar frecuencia</option>
+                            <option value="hourly">Cada hora</option>
+                            <option value="daily">Diario</option>
+                        </select>
+                    </div>
+                    <div class="mb-3" id="time-container" style="display: none;">
+                        <label for="reminder-time" class="form-label">Hora</label>
+                        <input type="time" class="form-control" id="reminder-time">
+                    </div>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-2"></i>Programar Recordatorio
+                        </button>
+                    </div>
+                </form>
+                
+                <hr>
+                
+                <h6 class="mb-3">Recordatorios Activos</h6>
+                <div id="active-reminders">
+                    <div class="text-center text-muted py-3">
+                        <i class="fas fa-spinner fa-spin me-2"></i>Cargando recordatorios...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .chat-container {
+        display: flex;
+        flex-direction: column;
+        height: 400px;
+    }
+    
+    .chat-messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: 1rem;
+        background-color: #f8f9fa;
+    }
+    
+    .message {
+        margin-bottom: 1rem;
+        max-width: 80%;
+    }
+    
+    .message.user {
+        margin-left: auto;
+    }
+    
+    .message.system {
+        margin-right: auto;
+    }
+    
+    .message-content {
+        padding: 0.75rem;
+        border-radius: 1rem;
+    }
+    
+    .message.user .message-content {
+        background-color: #007bff;
+        color: white;
+        border-top-right-radius: 0;
+    }
+    
+    .message.system .message-content {
+        background-color: #e9ecef;
+        border-top-left-radius: 0;
+    }
+    
+    .chat-input-container {
+        padding: 0.75rem;
+        border-top: 1px solid #dee2e6;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const userId = getCookie('user_id');
+        const authToken = getCookie('auth_token');
+        
+        // Elementos del dashboard
+        const latestSpo2 = document.getElementById('latest-spo2');
+        const latestPulse = document.getElementById('latest-pulse');
+        const spo2Status = document.getElementById('spo2-status');
+        const lastMeasured = document.getElementById('last-measured');
+        const criticalAlerts = document.getElementById('critical-alerts');
+        
+        // Elementos del chat
+        const chatMessages = document.getElementById('chat-messages');
+        const chatForm = document.getElementById('chat-form');
+        const chatInput = document.getElementById('chat-input');
+        const sendButton = document.getElementById('send-button');
+        
+        // Elementos de recordatorios
+        const reminderForm = document.getElementById('reminder-form');
+        const reminderFrequency = document.getElementById('reminder-frequency');
+        const reminderTime = document.getElementById('reminder-time');
+        const timeContainer = document.getElementById('time-container');
+        const activeReminders = document.getElementById('active-reminders');
+        
+        // Botones y selectores
+        const refreshDashboard = document.getElementById('refresh-dashboard');
+        const periodSelectors = document.querySelectorAll('.period-selector');
+        
+        // Variables para gráficos
+        let spo2Chart, rangeChart, pulseChart;
+        let currentPeriod = '7d';
+        
+        // Inicializar dashboard
+        loadDashboardData();
+        
+        // Inicializar recordatorios
+        loadReminders();
+        
+        // Inicializar chatbot
+        initializeChat();
+        
+        // Event listeners
+        refreshDashboard.addEventListener('click', loadDashboardData);
+        
+        periodSelectors.forEach(selector => {
+            selector.addEventListener('click', function() {
+                periodSelectors.forEach(s => s.classList.remove('active'));
+                this.classList.add('active');
+                currentPeriod = this.dataset.period;
+                loadDashboardData();
+            });
+        });
+        
+        reminderFrequency.addEventListener('change', function() {
+            if (this.value === 'daily') {
+                timeContainer.style.display = 'block';
+            } else {
+                timeContainer.style.display = 'none';
+            }
+        });
+        
+        // Formulario de chat
+        chatForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const message = chatInput.value.trim();
+            if (!message) return;
+            
+            // Añadir mensaje del usuario al chat
+            addChatMessage(message, 'user');
+            
+            // Limpiar input
+            chatInput.value = '';
+            
+            // Enviar mensaje al backend
+            sendChatMessage(message);
+        });
+        
+        // Formulario de recordatorios
+        reminderForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const frequency = reminderFrequency.value;
+            const time = reminderTime.value;
+            
+            if (!frequency) return;
+            
+            // Enviar recordatorio al backend
+            scheduleReminder(frequency, time);
+        });
+        
+        // Función para cargar datos del dashboard
+        async function loadDashboardData() {
+            try {
+                // Cargar datos del dashboard desde el backend
+                const dashboardResponse = await fetch('/api/dashboard');
+                if (!dashboardResponse.ok) {
+                    throw new Error('Error al cargar datos del dashboard');
+                }
+                const dashboardData = await dashboardResponse.json();
+                
+                // Cargar historial de mediciones
+                const historyResponse = await fetch(`/api/measures/history/${currentPeriod}`);
+                if (!historyResponse.ok) {
+                    throw new Error('Error al cargar historial de mediciones');
+                }
+                const historyData = await historyResponse.json();
+                
+                // Combinar datos
+                const data = {
+                    latest_measure: dashboardData.latest_measure,
+                    critical_alerts: dashboardData.critical_alerts,
+                    history: historyData
+                };
+                
+                // Actualizar indicadores
+                updateIndicators(data);
+                
+                // Actualizar gráficos
+                updateCharts(data);
+                
+            } catch (error) {
+                console.error('Error al cargar datos del dashboard:', error);
+                // Mostrar mensaje de error
+                showNotification('Error al cargar datos del dashboard. Intente nuevamente.', 'danger');
+            }
+        }
+        
+        // Función para actualizar indicadores
+        function updateIndicators(data) {
+            const { latest_measure, critical_alerts } = data;
+            
+            if (latest_measure) {
+                latestSpo2.textContent = latest_measure.spo2;
+                latestPulse.textContent = latest_measure.pulse;
+                
+                // Formatear fecha
+                const date = new Date(latest_measure.measured_at);
+                lastMeasured.textContent = date.toLocaleString();
+                
+                // Actualizar estado de SpO2
+                if (latest_measure.spo2 >= 95) {
+                    spo2Status.className = 'badge bg-success mb-2';
+                    spo2Status.textContent = 'Normal';
+                } else if (latest_measure.spo2 >= 90) {
+                    spo2Status.className = 'badge bg-warning mb-2';
+                    spo2Status.textContent = 'Precaución';
+                } else {
+                    spo2Status.className = 'badge bg-danger mb-2';
+                    spo2Status.textContent = 'Crítico';
+                }
+            } else {
+                latestSpo2.textContent = '--';
+                latestPulse.textContent = '--';
+                lastMeasured.textContent = '--';
+                spo2Status.className = 'badge bg-secondary mb-2';
+                spo2Status.textContent = 'Sin datos';
+            }
+            
+            criticalAlerts.textContent = critical_alerts || 0;
+        }
+        
+        // Función para actualizar gráficos
+        function updateCharts(data) {
+            const { history } = data;
+            
+            if (!history || history.length === 0) {
+                // No hay datos para mostrar
+                return;
+            }
+            
+            // Preparar datos para gráficos
+           const labels = history.map(item => {
+                const dateStr = item.timestamp.replace(/\+00:00$/, 'Z');
+                const date = new Date(dateStr);
+                return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            });
+            
+            const spo2Data = history.map(item => item.spo2);
+            const pulseData = history.map(item => item.pulse);
+            
+            // Contar rangos
+            const ranges = {
+                normal: 0,
+                caution: 0,
+                critical: 0
+            };
+            
+            history.forEach(item => {
+                if (item.spo2 >= 95) ranges.normal++;
+                else if (item.spo2 >= 90) ranges.caution++;
+                else ranges.critical++;
+            });
+            
+            // Gráfico de SpO2
+            if (spo2Chart) {
+                spo2Chart.data.labels = labels;
+                spo2Chart.data.datasets[0].data = spo2Data;
+                spo2Chart.update();
+            } else {
+                const ctx = document.getElementById('spo2-chart').getContext('2d');
+                spo2Chart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'SpO₂ (%)',
+                            data: spo2Data,
+                            borderColor: '#007bff',
+                            backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            y: {
+                                min: 50,
+                                max: 100,
+                                ticks: {
+                                    stepSize: 5
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // Gráfico de rangos
+            if (rangeChart) {
+                rangeChart.data.datasets[0].data = [ranges.normal, ranges.caution, ranges.critical];
+                rangeChart.update();
+            } else {
+                const ctx = document.getElementById('range-chart').getContext('2d');
+                rangeChart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Normal', 'Precaución', 'Crítico'],
+                        datasets: [{
+                            data: [ranges.normal, ranges.caution, ranges.critical],
+                            backgroundColor: ['#28a745', '#ffc107', '#dc3545']
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                position: 'bottom'
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // Gráfico de pulso
+            if (pulseChart) {
+                pulseChart.data.labels = labels;
+                pulseChart.data.datasets[0].data = pulseData;
+                pulseChart.update();
+            } else {
+                const ctx = document.getElementById('pulse-chart').getContext('2d');
+                pulseChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Pulso (BPM)',
+                            data: pulseData,
+                            borderColor: '#dc3545',
+                            backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            y: {
+                                min: 50,
+                                max: 180,
+                                ticks: {
+                                    stepSize: 10
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+        
+        // Función para cargar recordatorios
+        async function loadReminders() {
+            try {
+                const response = await fetch('/api/reminders');
+                if (!response.ok) {
+                    throw new Error('Error al cargar recordatorios');
+                }
+                
+                const reminders = await response.json();
+                
+                // Actualizar lista de recordatorios
+                updateRemindersList(reminders);
+                
+            } catch (error) {
+                console.error('Error al cargar recordatorios:', error);
+                activeReminders.innerHTML = '<div class="text-center text-danger py-3">Error al cargar recordatorios</div>';
+            }
+        }
+        
+        // Función para actualizar lista de recordatorios
+        function updateRemindersList(reminders) {
+            if (!reminders || reminders.length === 0) {
+                activeReminders.innerHTML = '<div class="text-center text-muted py-3">No hay recordatorios activos</div>';
+                return;
+            }
+            
+            let html = '';
+            
+            reminders.forEach(reminder => {
+                const date = new Date(reminder.next_run);
+                const formattedDate = date.toLocaleString();
+                
+                html += `
+                <div class="card mb-2">
+                    <div class="card-body py-2">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="fw-bold">${reminder.frequency === 'daily' ? 'Diario' : 'Cada hora'}</div>
+                                <div class="small text-muted">Próximo: ${formattedDate}</div>
+                            </div>
+                            <button class="btn btn-sm btn-outline-danger cancel-reminder" data-id="${reminder.id}">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                `;
+            });
+            
+            activeReminders.innerHTML = html;
+            
+            // Añadir event listeners a botones de cancelar
+            document.querySelectorAll('.cancel-reminder').forEach(button => {
+                button.addEventListener('click', function() {
+                    const reminderId = this.dataset.id;
+                    cancelReminder(reminderId);
+                });
+            });
+        }
+        
+        // Función para programar recordatorio
+        async function scheduleReminder(frequency, time) {
+            try {
+                const response = await fetch('/api/reminders', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ frequency, time })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Error al programar recordatorio');
+                }
+                
+                // Simular éxito
+                showNotification('Recordatorio programado correctamente', 'success');
+                
+                // Recargar recordatorios
+                loadReminders();
+                
+                // Resetear formulario
+                reminderForm.reset();
+                timeContainer.style.display = 'none';
+                
+            } catch (error) {
+                console.error('Error al programar recordatorio:', error);
+                showNotification('Error al programar recordatorio', 'danger');
+            }
+        }
+        
+        // Función para cancelar recordatorio
+        async function cancelReminder(reminderId) {
+            try {
+                const response = await fetch(`/api/reminders/${reminderId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Error al cancelar recordatorio');
+                }
+                
+                // Simular éxito
+                showNotification('Recordatorio cancelado correctamente', 'success');
+                
+                // Recargar recordatorios
+                loadReminders();
+                
+            } catch (error) {
+                console.error('Error al cancelar recordatorio:', error);
+                showNotification('Error al cancelar recordatorio', 'danger');
+            }
+        }
+        
+        // Función para inicializar el chatbot
+        async function initializeChat() {
+            try {
+                // Cargar el modelo del chatbot desde el backend
+                const response = await fetch('/api/chat/initiate');
+                if (!response.ok) {
+                    throw new Error('Error al inicializar el chatbot');
+                }
+                
+                // Habilitar la entrada de texto y el botón de envío
+                chatInput.disabled = false;
+                sendButton.disabled = false;
+                
+                // Cambiar el mensaje de carga por un mensaje de bienvenida
+                chatMessages.innerHTML = `
+                    <div class="message system">
+                        <div class="message-content">
+                            <p>Bienvenido al chatbot de Oxymonitor. ¿En qué puedo ayudarte hoy?</p>
+                        </div>
+                    </div>
+                `;
+                
+            } catch (error) {
+                console.error('Error al inicializar el chatbot:', error);
+                chatMessages.innerHTML = `
+                    <div class="message system">
+                        <div class="message-content">
+                            <p>Error al inicializar el chatbot. Por favor, inténtalo de nuevo más tarde.</p>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        // Función para enviar mensaje al chatbot
+        async function sendChatMessage(message) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 segundos
+
+            try {
+                // Enviar mensaje al backend y obtener respuesta
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ message }),
+                    signal: controller.signal
+                });
+
+                clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    let errorMsg = errorData.detail || errorData.error || "Error al enviar mensaje al chatbot";
+                    throw new Error(errorMsg);
+                }
+
+                const data = await response.json();
+                console.log('Respuesta del chatbot:', data);
+
+                let reply = '';
+                if (data.type === "function") {
+                    reply = data.result || "Sin respuesta de la función.";
+                } else if (data.type === "text") {
+                    reply = data.content || "Sin respuesta.";
+                } else if (data.type === "error") {
+                    reply = data.error || "Ocurrió un error inesperado.";
+                } else {
+                    reply = data.content || data.result || "Sin respuesta.";
+                }
+
+                addChatMessage(reply, 'system');
+
+            } catch (error) {
+                clearTimeout(timeoutId);
+                if (error.name === 'AbortError') {
+                    addChatMessage("Tiempo de espera agotado. Por favor, inténtalo de nuevo.", 'system');
+                } else {
+                    console.error('Error al enviar mensaje:', error);
+                    addChatMessage("Lo siento, ha ocurrido un error. Por favor, inténtalo de nuevo.", 'system');
+                }
+            }
+        }
+        
+        function addChatMessage(message, type) {
+            if (message === null || message === undefined) message = "Sin respuesta.";
+            const messageElement = document.createElement('div');
+            messageElement.className = `message ${type}`;
+            messageElement.innerHTML = `
+                <div class="message-content">
+                    <p>${message}</p>
+                </div>
+            `;
+            chatMessages.appendChild(messageElement);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        
+        // Función para generar datos de historial simulados
+        function generateMockHistory(days) {
+            const history = [];
+            const now = new Date();
+            
+            for (let i = 0; i < days; i++) {
+                const date = new Date(now);
+                date.setDate(date.getDate() - i);
+                
+                // Valores simulados
+                const spo2 = Math.floor(Math.random() * 11) + 90; // 90-100
+                const pulse = Math.floor(Math.random() * 41) + 60; // 60-100
+                
+                history.push({
+                    timestamp: date.toISOString(),
+                    spo2: spo2,
+                    pulse: pulse
+                });
+            }
+            
+            // Ordenar por fecha (más antiguo primero)
+            return history.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        }
+        
+        // Función para obtener cookies
+        function getCookie(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+        }
+        
+        // Función para mostrar notificaciones
+        function showNotification(message, type) {
+            const notification = document.createElement('div');
+            notification.className = `alert alert-${type} alert-dismissible fade show`;
+            notification.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // Remover la notificación después de 5 segundos
+            setTimeout(() => {
+                notification.remove();
+            }, 5000);
+        }
+    });
+</script>
+{% endblock %}

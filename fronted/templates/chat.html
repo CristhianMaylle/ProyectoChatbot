@@ -1,0 +1,299 @@
+{% extends "base.html" %}
+
+{% block title %}Chatbot - Oxymonitor{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card border-0 shadow-lg">
+            <div class="card-header bg-primary text-white py-3">
+                <h3 class="mb-0">
+                    <i class="fas fa-robot me-2"></i>Chatbot Oxymonitor
+                </h3>
+            </div>
+            <div class="card-body p-0">
+                <div class="chat-container">
+                    <div class="chat-messages" id="chat-messages">
+                        <div class="message system">
+                            <div class="message-content">
+                                <p id="welcome-message">Conectando con el chatbot...</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="chat-input-container">
+                        <form id="chat-form">
+                            <div class="input-group">
+                                <input type="text" id="chat-input" class="form-control" placeholder="Escribe tu mensaje..." disabled>
+                                <button type="submit" class="btn btn-primary" disabled id="send-button">
+                                    <i class="fas fa-paper-plane"></i>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer bg-light py-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle me-1"></i>Este chatbot está especializado en temas relacionados con oxígeno en sangre y pulso cardíaco.
+                        </small>
+                    </div>
+                    <div>
+                        <button id="clear-chat" class="btn btn-sm btn-outline-secondary">
+                            <i class="fas fa-trash me-1"></i>Limpiar chat
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card border-0 shadow-sm mt-4">
+            <div class="card-header bg-white">
+                <h5 class="mb-0">Preguntas Sugeridas</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="list-group">
+                            <button class="list-group-item list-group-item-action suggested-question">
+                                ¿Qué significa un nivel de oxígeno de 92%?
+                            </button>
+                            <button class="list-group-item list-group-item-action suggested-question">
+                                ¿Cuáles son los síntomas de un nivel bajo de oxígeno?
+                            </button>
+                            <button class="list-group-item list-group-item-action suggested-question">
+                                ¿Cómo puedo mejorar mi nivel de oxígeno?
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="list-group">
+                            <button class="list-group-item list-group-item-action suggested-question">
+                                ¿Es normal tener un pulso de 110 BPM?
+                            </button>
+                            <button class="list-group-item list-group-item-action suggested-question">
+                                ¿Qué factores afectan la saturación de oxígeno?
+                            </button>
+                            <button class="list-group-item list-group-item-action suggested-question">
+                                ¿Cuándo debo buscar atención médica?
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .chat-container {
+        display: flex;
+        flex-direction: column;
+        height: 500px;
+    }
+    
+    .chat-messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: 1rem;
+        background-color: #f8f9fa;
+    }
+    
+    .message {
+        margin-bottom: 1rem;
+        max-width: 80%;
+    }
+    
+    .message.user {
+        margin-left: auto;
+    }
+    
+    .message.system {
+        margin-right: auto;
+    }
+    
+    .message-content {
+        padding: 0.75rem;
+        border-radius: 1rem;
+    }
+    
+    .message.user .message-content {
+        background-color: #007bff;
+        color: white;
+        border-top-right-radius: 0;
+    }
+    
+    .message.system .message-content {
+        background-color: #e9ecef;
+        border-top-left-radius: 0;
+    }
+    
+    .chat-input-container {
+        padding: 0.75rem;
+        border-top: 1px solid #dee2e6;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const chatMessages = document.getElementById('chat-messages');
+        const chatForm = document.getElementById('chat-form');
+        const chatInput = document.getElementById('chat-input');
+        const sendButton = document.getElementById('send-button');
+        const clearChat = document.getElementById('clear-chat');
+        const welcomeMessage = document.getElementById('welcome-message');
+        const suggestedQuestions = document.querySelectorAll('.suggested-question');
+        
+        const userId = getCookie('user_id');
+        const userName = getCookie('user_name');
+        const isAnonymous = !userId;
+        
+        // Inicializar chat
+        initializeChat();
+        
+        // Event listeners
+        chatForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const message = chatInput.value.trim();
+            if (!message) return;
+            
+            // Añadir mensaje del usuario al chat
+            addChatMessage(message, 'user');
+            
+            // Limpiar input
+            chatInput.value = '';
+            
+            // Enviar mensaje al backend
+            sendChatMessage(message);
+        });
+        
+        clearChat.addEventListener('click', function() {
+            // Limpiar mensajes excepto el de bienvenida
+            while (chatMessages.children.length > 1) {
+                chatMessages.removeChild(chatMessages.lastChild);
+            }
+        });
+        
+        suggestedQuestions.forEach(question => {
+            question.addEventListener('click', function() {
+                const message = this.textContent.trim();
+                
+                // Añadir mensaje al chat
+                addChatMessage(message, 'user');
+                
+                // Enviar mensaje al backend
+                sendChatMessage(message);
+            });
+        });
+        
+        // Función para inicializar chat
+        async function initializeChat() {
+            try {
+                // Obtener información inicial del chat
+                const response = await fetch('/api/chat/initiate');
+                if (!response.ok) {
+                    throw new Error('Error al inicializar el chat');
+                }
+                
+                const data = await response.json();
+                
+                // Actualizar mensaje de bienvenida
+                welcomeMessage.textContent = data.welcome_message;
+                
+                // Habilitar input
+                chatInput.disabled = false;
+                sendButton.disabled = false;
+                chatInput.focus();
+                
+            } catch (error) {
+                console.error('Error al inicializar chat:', error);
+                welcomeMessage.textContent = 'Error al conectar con el chatbot. Por favor, recarga la página.';
+            }
+        }
+        
+        // Función para enviar mensaje al chatbot
+        async function sendChatMessage(message) {
+            try {
+                // Mostrar "escribiendo..."
+                const typingMessage = document.createElement('div');
+                typingMessage.className = 'message system typing';
+                typingMessage.innerHTML = `
+                    <div class="message-content">
+                        <p><i class="fas fa-spinner fa-spin me-2"></i>Escribiendo...</p>
+                    </div>
+                `;
+                chatMessages.appendChild(typingMessage);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+                
+                // Enviar mensaje al backend
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ message })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Error al enviar mensaje');
+                }
+                
+                // Eliminar mensaje de "escribiendo..."
+                chatMessages.removeChild(typingMessage);
+                
+                // Procesar respuesta
+                const data = await response.json();
+                
+                // Añadir respuesta al chat
+                if (data.type === 'text') {
+                    addChatMessage(data.content, 'system');
+                } else if (data.type === 'function') {
+                    addChatMessage(data.result, 'system');
+                } else {
+                    addChatMessage('Lo siento, ha ocurrido un error. Por favor, inténtalo de nuevo.', 'system');
+                }
+                
+            } catch (error) {
+                console.error('Error al enviar mensaje:', error);
+                
+                // Eliminar mensaje de "escribiendo..." si existe
+                const typingMessage = document.querySelector('.typing');
+                if (typingMessage) {
+                    chatMessages.removeChild(typingMessage);
+                }
+                
+                addChatMessage("Lo siento, ha ocurrido un error. Por favor, inténtalo de nuevo.", 'system');
+            }
+        }
+        
+        // Función para añadir mensaje al chat
+        function addChatMessage(message, type) {
+            const messageElement = document.createElement('div');
+            messageElement.className = `message ${type}`;
+            messageElement.innerHTML = `
+                <div class="message-content">
+                    <p>${message}</p>
+                </div>
+            `;
+            
+            chatMessages.appendChild(messageElement);
+            
+            // Scroll al final
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        
+        // Función para obtener cookies
+        function getCookie(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+        }
+    });
+</script>
+{% endblock %}

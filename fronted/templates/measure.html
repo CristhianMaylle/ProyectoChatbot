@@ -1,0 +1,287 @@
+{% extends "base.html" %}
+
+{% block title %}Medir Oxígeno - Oxymonitor{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow-lg border-0 rounded-lg">
+            <div class="card-header bg-primary text-white text-center py-3">
+                <h3 class="mb-0">Medir Nivel de Oxígeno</h3>
+            </div>
+            <div class="card-body p-4">
+                <div class="text-center mb-4">
+                    <div id="connection-status" class="alert alert-info">
+                        <i class="fas fa-spinner fa-spin me-2"></i>Buscando sensor Arduino...
+                    </div>
+                </div>
+                
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <div class="text-center mb-4">
+                            <img src="{{ url_for('static', path='/img/finger-sensor.png') }}" alt="Coloque su dedo en el sensor" class="img-fluid rounded mb-3" style="max-height: 200px;">
+                            <p class="lead">Coloque su dedo en el sensor y espere la medición</p>
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button id="start-measure" class="btn btn-primary btn-lg" disabled>
+                                <i class="fas fa-heartbeat me-2"></i>Iniciar Medición
+                            </button>
+                            <button id="manual-measure" class="btn btn-outline-secondary">
+                                <i class="fas fa-keyboard me-2"></i>Ingresar Manualmente
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="measurement-display">
+                            <div class="card mb-3">
+                                <div class="card-body text-center">
+                                    <h5 class="card-title">SpO₂ (Oxígeno)</h5>
+                                    <div class="display-1 fw-bold" id="spo2-value">--</div>
+                                    <div class="badge bg-secondary mb-2" id="spo2-status">Esperando...</div>
+                                </div>
+                            </div>
+                            
+                            <div class="card">
+                                <div class="card-body text-center">
+                                    <h5 class="card-title">Pulso</h5>
+                                    <div class="display-1 fw-bold" id="pulse-value">--</div>
+                                    <div class="text-muted">BPM</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Formulario manual (oculto por defecto) -->
+                <div id="manual-form" class="mt-4" style="display: none;">
+                    <h4 class="mb-3">Ingreso Manual de Medición</h4>
+                    <form id="manual-measurement-form">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="manual-spo2" class="form-label">SpO₂ (%)</label>
+                                <input type="number" class="form-control" id="manual-spo2" min="70" max="100" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="manual-pulse" class="form-label">Pulso (BPM)</label>
+                                <input type="number" class="form-control" id="manual-pulse" min="40" max="200" required>
+                            </div>
+                        </div>
+                        <div class="d-grid mt-3">
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-save me-2"></i>Guardar Medición
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                
+                <!-- Resultados y acciones -->
+                <div id="measurement-results" class="mt-4" style="display: none;">
+                    <div class="alert" id="result-alert" role="alert"></div>
+                    
+                    <div class="d-grid gap-2">
+                        {% if user %}
+                        <a href="/dashboard" class="btn btn-success">
+                            <i class="fas fa-chart-line me-2"></i>Ver en Dashboard
+                        </a>
+                        {% else %}
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>Regístrate para guardar tu historial de mediciones y recibir alertas personalizadas.
+                        </div>
+                        <div class="d-flex gap-2">
+                            <a href="/register" class="btn btn-primary flex-grow-1">
+                                <i class="fas fa-user-plus me-2"></i>Registrarse
+                            </a>
+                            <a href="/login" class="btn btn-outline-primary flex-grow-1">
+                                <i class="fas fa-sign-in-alt me-2"></i>Iniciar Sesión
+                            </a>
+                        </div>
+                        {% endif %}
+                        
+                        <a href="/chat" class="btn btn-info">
+                            <i class="fas fa-comment-medical me-2"></i>Consultar con Chatbot
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const connectionStatus = document.getElementById('connection-status');
+        const startMeasureBtn = document.getElementById('start-measure');
+        const manualMeasureBtn = document.getElementById('manual-measure');
+        const manualForm = document.getElementById('manual-form');
+        const manualMeasurementForm = document.getElementById('manual-measurement-form');
+        const measurementResults = document.getElementById('measurement-results');
+        const resultAlert = document.getElementById('result-alert');
+        
+        const spo2Value = document.getElementById('spo2-value');
+        const spo2Status = document.getElementById('spo2-status');
+        const pulseValue = document.getElementById('pulse-value');
+        
+        // Verificar conexión con Arduino
+        checkArduinoConnection();
+        
+        // Botón de medición manual
+        manualMeasureBtn.addEventListener('click', function() {
+            manualForm.style.display = 'block';
+        });
+        
+        // Formulario de medición manual
+        manualMeasurementForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const manualSpo2 = document.getElementById('manual-spo2').value;
+            const manualPulse = document.getElementById('manual-pulse').value;
+            
+            // Actualizar valores en pantalla
+            spo2Value.textContent = manualSpo2;
+            pulseValue.textContent = manualPulse;
+            
+            // Actualizar estado según el valor de SpO2
+            updateSpo2Status(manualSpo2);
+            
+            // Mostrar resultados
+            showResults(manualSpo2, manualPulse);
+            
+            // Ocultar formulario manual
+            manualForm.style.display = 'none';
+            
+            // Enviar datos al backend (si el usuario está autenticado)
+            if (getCookie('user_id')) {
+                saveMeasurement(manualSpo2, manualPulse);
+            }
+        });
+        
+        // Botón de iniciar medición
+        startMeasureBtn.addEventListener('click', function() {
+            connectionStatus.className = 'alert alert-info';
+            connectionStatus.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Midiendo...';
+            startMeasureBtn.disabled = true;
+            
+            // Obtener medición del Arduino
+            fetch('/api/arduino/measure', {method:'POST'})
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Error al obtener medición');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // Actualizar valores en pantalla
+                    spo2Value.textContent = data.spo2;
+                    pulseValue.textContent = data.pulse;
+                    
+                    // Actualizar estado según el valor de SpO2
+                    updateSpo2Status(data.spo2);
+                    
+                    // Mostrar resultados
+                    showResults(data.spo2, data.pulse);
+                    
+                    // Restablecer botón
+                    startMeasureBtn.disabled = false;
+                    connectionStatus.className = 'alert alert-success';
+                    connectionStatus.innerHTML = '<i class="fas fa-check-circle me-2"></i>Medición completada';
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    connectionStatus.className = 'alert alert-danger';
+                    connectionStatus.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Error al realizar la medición. Intente nuevamente.';
+                    startMeasureBtn.disabled = false;
+                });
+        });
+        // Función para verificar conexión con Arduino
+        function checkArduinoConnection() {
+            fetch('/api/arduino/connect')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Error al conectar con Arduino');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.status !== "ok") {
+                        connectionStatus.className = 'alert alert-danger';
+                        connectionStatus.innerHTML = `<i class="fas fa-exclamation-triangle me-2"></i>${data.message || 'No se pudo conectar al sensor. Use el ingreso manual.'}`;
+                    } else {
+                        connectionStatus.className = 'alert alert-success';
+                        connectionStatus.innerHTML = `<i class="fas fa-check-circle me-2"></i>${data.message || 'Sensor conectado y listo'}`;
+                        startMeasureBtn.disabled = false;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    connectionStatus.className = 'alert alert-danger';
+                    connectionStatus.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>No se pudo conectar al sensor. Use el ingreso manual.';
+                });
+        }
+        // Función para actualizar el estado de SpO2
+        function updateSpo2Status(spo2) {
+            if (spo2 >= 95) {
+                spo2Status.className = 'badge bg-success mb-2';
+                spo2Status.textContent = 'Normal';
+            } else if (spo2 >= 90) {
+                spo2Status.className = 'badge bg-warning mb-2';
+                spo2Status.textContent = 'Precaución';
+            } else {
+                spo2Status.className = 'badge bg-danger mb-2';
+                spo2Status.textContent = 'Crítico';
+            }
+        }
+        
+        // Función para mostrar resultados
+        function showResults(spo2, pulse) {
+            measurementResults.style.display = 'block';
+            
+            if (spo2 >= 95) {
+                resultAlert.className = 'alert alert-success';
+                resultAlert.innerHTML = '<i class="fas fa-check-circle me-2"></i><strong>Nivel de oxígeno normal.</strong> Su nivel de oxígeno está dentro del rango saludable.';
+            } else if (spo2 >= 90) {
+                resultAlert.className = 'alert alert-warning';
+                resultAlert.innerHTML = '<i class="fas fa-exclamation-circle me-2"></i><strong>Precaución.</strong> Su nivel de oxígeno está ligeramente por debajo de lo normal. Considere consultar con un médico si persiste.';
+            } else {
+                resultAlert.className = 'alert alert-danger';
+                resultAlert.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i><strong>¡Nivel crítico!</strong> Su nivel de oxígeno está significativamente bajo. Se recomienda buscar atención médica inmediata.';
+            }
+        }
+        
+        // Función para guardar medición en el backend
+        async function saveMeasurement(spo2, pulse) {
+            const userId = getCookie('user_id');
+            
+            try {
+                const response = await fetch('/api/measures', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        user_id: parseInt(userId),
+                        spo2: parseInt(spo2),
+                        pulse: parseInt(pulse)
+                    })
+                });
+                
+                if (!response.ok) {
+                    console.error('Error al guardar medición');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+        
+        // Función para obtener cookies
+        function getCookie(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+        }
+    });
+</script>
+{% endblock %}
