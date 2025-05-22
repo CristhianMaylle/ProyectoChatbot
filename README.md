@@ -1,5 +1,5 @@
 # La documentacion se escuentra en su respectiva carpeta
-# 📄 Esquema SQL del Proyecto de Monitoreo de Salud
+# 📄 Esquema SQL del Proyecto de OXIBOT
 
 Este script crea todas las tablas necesarias para el sistema, incorporando los últimos cambios y mejoras estructurales. Incluye control de usuarios, mediciones, alertas, configuraciones, recordatorios, logs de chatbot y exportaciones administrativas.
 
